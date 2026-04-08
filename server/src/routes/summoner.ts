@@ -1,61 +1,70 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
+import { getPlayer, upsertPlayer } from '../db/database';
 
 const router = Router();
 
-// GET /api/summoner/:gameName/:tagLine
 router.get('/summoner/:gameName/:tagLine', async (req: Request, res: Response) => {
   const { gameName, tagLine } = req.params;
   const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
+  // Serve from DB if fresh (< 10 min)
+  const cached = getPlayer(gameName, tagLine);
+  if (cached) {
+    console.log(`[DB HIT] player ${gameName}#${tagLine}`);
+    res.json({ puuid: cached.puuid, gameName: cached.gameName, tagLine: cached.tagLine, summoner: cached, ranked: [] });
+    return;
+  }
+
   try {
-    // Step 1: Get PUUID from Riot Account API (Europe routing)
-    const url1 = `https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
-    console.log('[Step 1]', url1);
-    const accountRes = await axios.get(url1, { headers: { 'X-Riot-Token': RIOT_API_KEY } });
-    const { puuid } = accountRes.data;
-    console.log('[Step 1] OK — puuid:', puuid.slice(0, 10) + '...');
+    const accountRes = await axios.get(
+      `https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`,
+      { headers: { 'X-Riot-Token': RIOT_API_KEY } }
+    );
+    const { puuid } = accountRes.data as { puuid: string };
 
-    // Step 2: Get summoner data from EUW1 (profileIconId, summonerLevel)
-    const url2 = `https://euw1.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`;
-    const summonerRes = await axios.get(url2, { headers: { 'X-Riot-Token': RIOT_API_KEY } });
-    const summoner = summonerRes.data;
+    const [summonerRes, rankedRes] = await Promise.all([
+      axios.get(`https://euw1.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`, {
+        headers: { 'X-Riot-Token': RIOT_API_KEY },
+      }),
+      axios.get(`https://euw1.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`, {
+        headers: { 'X-Riot-Token': RIOT_API_KEY },
+      }),
+    ]);
 
-    // Step 3: Get ranked stats via PUUID (Riot a supprimé summonerId de la réponse summoner)
-    const url3 = `https://euw1.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`;
-    const rankedRes = await axios.get(url3, { headers: { 'X-Riot-Token': RIOT_API_KEY } });
+    const summoner = summonerRes.data as { profileIconId: number; summonerLevel: number };
     const ranked = rankedRes.data;
 
-    res.json({
+    upsertPlayer({
       puuid,
       gameName,
       tagLine,
-      summoner,
-      ranked,
+      profileIconId: summoner.profileIconId,
+      summonerLevel: summoner.summonerLevel,
+      last_updated: Date.now(),
     });
+    console.log(`[DB SET] player ${gameName}#${tagLine}`);
+
+    res.json({ puuid, gameName, tagLine, summoner, ranked });
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status || 500;
-      const riotMessage = error.response?.data?.status?.message || '';
-      console.error(`[Riot API] ${status} — ${riotMessage || error.message}`);
+      const riotMsg = (error.response?.data as { status?: { message?: string } })?.status?.message || '';
+      console.error(`[Riot API] ${status} — ${riotMsg || error.message}`);
 
-      let message: string;
-      if (status === 404) {
-        message = 'Joueur introuvable. Vérifie le pseudo et le tag (ex: Pseudo#EUW).';
-      } else if (status === 403) {
-        message = 'Clé API Riot expirée. Renouvelle-la sur developer.riotgames.com (valable 24h).';
-      } else if (status === 429) {
-        message = 'Limite de requêtes Riot atteinte. Réessaie dans quelques secondes.';
-      } else if (status === 401) {
-        message = 'Clé API Riot manquante ou invalide dans server/.env.';
-      } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-        message = 'Impossible de joindre l\'API Riot. Vérifie ta connexion internet.';
-      } else {
-        message = `Erreur Riot API (${status})${riotMessage ? ': ' + riotMessage : ''}.`;
-      }
-      res.status(status).json({ error: message });
+      const messages: Record<number, string> = {
+        404: 'Joueur introuvable. Vérifie le pseudo et le tag (ex: Pseudo#EUW).',
+        403: 'Clé API Riot expirée. Renouvelle-la sur developer.riotgames.com (valable 24h).',
+        429: 'Limite de requêtes Riot atteinte. Réessaie dans quelques secondes.',
+        401: 'Clé API Riot manquante ou invalide dans server/.env.',
+      };
+      const msg = messages[status]
+        ?? (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND'
+          ? "Impossible de joindre l'API Riot."
+          : `Erreur Riot API (${status})${riotMsg ? ': ' + riotMsg : ''}.`);
+
+      res.status(status).json({ error: msg });
     } else {
-      console.error('[Server] Erreur interne:', error);
       res.status(500).json({ error: 'Erreur serveur interne.' });
     }
   }

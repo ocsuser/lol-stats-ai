@@ -1,17 +1,5 @@
-export interface RankedEntry {
-  queueType: string;
-  tier: string;
-  rank: string;
-  leaguePoints: number;
-  wins: number;
-  losses: number;
-}
-
 export interface Summoner {
-  id: string;
-  accountId: string;
   puuid: string;
-  name: string;
   profileIconId: number;
   summonerLevel: number;
 }
@@ -21,40 +9,58 @@ export interface PlayerData {
   gameName: string;
   tagLine: string;
   summoner: Summoner;
-  ranked: RankedEntry[];
 }
 
-export interface MatchData {
+export interface ArenaMatchData {
   matchId: string;
   gameCreation: number;
   gameDuration: number;
+  placement: number;
   win: boolean;
   championName: string;
   champLevel: number;
   kills: number;
   deaths: number;
   assists: number;
-  totalMinionsKilled: number;
-  visionScore: number;
-  goldEarned: number;
   totalDamageDealtToChampions: number;
-  item0: number;
-  item1: number;
-  item2: number;
-  item3: number;
-  item4: number;
-  item5: number;
-  item6: number;
-  role: string;
+  goldEarned: number;
+  augments: number[];
+  duoChampion: string | null;
+  duoKills: number | null;
+  duoDeaths: number | null;
+  duoAssists: number | null;
+}
+
+export interface AugmentInfo { name: string; iconUrl: string; }
+export type AugmentMap = Record<number, AugmentInfo>;
+
+export interface ChampionStat {
+  name: string; games: number;
+  avgPlacement: number; winrate: number;
+  avgKills: number; avgDeaths: number; avgAssists: number; avgDamage: number;
+}
+
+export interface DuoStat {
+  partner: string; games: number; avgPlacement: number; winrate: number;
+}
+
+export interface ArenaAggregate {
+  totalGames: number;
+  top1: number; top2: number;
+  top1Rate: number; winrate: number;
+  avgPlacement: number;
+  avgKills: number; avgDeaths: number; avgAssists: number;
+  avgDamage: number;
+  placementDistribution: { p1: number; p2: number; p3: number; p4: number };
+  topChampions: ChampionStat[];
+  topDuos: DuoStat[];
+  message?: string;
 }
 
 export interface AnalysisResult {
   analysis: string;
   stats: {
-    winrate: string;
-    avgKDA: string;
-    avgCSPerMin: string;
-    avgVision: string;
-    topChamps: string;
+    avgPlacement: string; winrate: string; top1Rate: string;
+    avgKDA: string; avgDmg: string; topChamps: string;
   };
 }

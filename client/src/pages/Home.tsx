@@ -30,8 +30,8 @@ export default function Home() {
             </h1>
           </div>
           <p className="text-brand-muted text-lg max-w-md">
-            Analyse tes performances League of Legends avec l'intelligence artificielle locale.
-            Obtiens des conseils personnalisés pour monter en elo.
+            Analyse tes performances en mode <span className="text-brand-blue font-semibold">Arena</span> avec l'IA locale.
+            Placements, duos, champions et augments — coaching personnalisé Mistral 7B.
           </p>
         </div>
 
@@ -58,9 +58,9 @@ export default function Home() {
         {/* Feature cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 max-w-2xl w-full">
           {[
-            { icon: '📊', title: 'Stats détaillées', desc: 'KDA, CS, vision score et rang' },
-            { icon: '🕹️', title: 'Historique complet', desc: 'Tes 10 dernières parties classées' },
-            { icon: '🤖', title: 'Analyse IA locale', desc: 'Conseils via Mistral 7B (Ollama)' },
+            { icon: '🏆', title: 'Stats Arena', desc: 'Placement, dégâts, duos et augments' },
+            { icon: '⚔️', title: 'Historique Arena', desc: '10 dernières parties avec code couleur' },
+            { icon: '🤖', title: 'Coach IA local', desc: 'Coaching Arena via Mistral 7B (Ollama)' },
           ].map((f) => (
             <div
               key={f.title}
